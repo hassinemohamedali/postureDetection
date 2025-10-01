@@ -1,6 +1,8 @@
+import sys
+import streamlit as st
+st.sidebar.info(f"🐍 Python version: {sys.version}")
 import mediapipe as mp
 import av
-import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
