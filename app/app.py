@@ -7,10 +7,12 @@ import av
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 
-# Mediapipe pose & drawing
+# ========== Pose & Drawing ==========
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 
+
+# ========== Custom Function ==========
 def check_guard(img, wrist, shoulder, elbow, h, w):
     # Convert normalized landmarks to pixel coordinates
     wrist_xy = (int(wrist.x * w), int(wrist.y * h))
@@ -27,13 +29,16 @@ def check_guard(img, wrist, shoulder, elbow, h, w):
     cv2.line(img, shoulder_xy, elbow_xy, color, 3)
     cv2.line(img, elbow_xy, wrist_xy, color, 3)
 
-    # Optional: draw circles
+    # Optional: draw small circles on joints
     cv2.circle(img, shoulder_xy, 6, color, -1)
     cv2.circle(img, elbow_xy, 6, color, -1)
     cv2.circle(img, wrist_xy, 6, color, -1)
 
+
+# ========== Processor Class ==========
 class PoseProcessor(VideoProcessorBase):
     def __init__(self):
+        # Create a Pose instance per processor (thread-safe)
         self.pose = mp_pose.Pose()
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
@@ -44,8 +49,10 @@ class PoseProcessor(VideoProcessorBase):
         results = self.pose.process(img_rgb)
 
         if results.pose_landmarks:
+            # Draw skeleton
             mp_draw.draw_landmarks(img, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
+            # Extract landmarks
             landmarks = results.pose_landmarks.landmark
             left_wrist = landmarks[mp_pose.PoseLandmark.LEFT_WRIST]
             left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
@@ -54,13 +61,16 @@ class PoseProcessor(VideoProcessorBase):
             right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
             right_elbow = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW]
 
+            # Apply guard checks
             check_guard(img, left_wrist, left_shoulder, left_elbow, h, w)
             check_guard(img, right_wrist, right_shoulder, right_elbow, h, w)
         else:
             cv2.putText(img, "No pose detected", (10, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+        # Return as av.VideoFrame
+        new_frame = av.VideoFrame.from_ndarray(img, format="bgr24")
+        return new_frame
 
     def __del__(self):
         try:
@@ -68,7 +78,9 @@ class PoseProcessor(VideoProcessorBase):
         except:
             pass
 
-st.title("🤖 Pose Detection with Streamlit + WebRTC")
+
+# ========== Streamlit UI ==========
+st.title("Pose Detection with Streamlit + WebRTC")
 
 webrtc_streamer(
     key="pose-detection",
