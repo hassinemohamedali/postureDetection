@@ -1,6 +1,5 @@
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress TF warnings
-
 import mediapipe as mp
 import av
 import streamlit as st
