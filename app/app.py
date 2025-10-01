@@ -1,17 +1,19 @@
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress TF warnings
 
-import cv2
 import mediapipe as mp
 import av
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
+from PIL import Image, ImageDraw, ImageFont
+import numpy as np
 
 # Mediapipe pose & drawing
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 
-def check_guard(img, wrist, shoulder, elbow, h, w):
+
+def check_guard(draw, wrist, shoulder, elbow, h, w):
     # Convert normalized landmarks to pixel coordinates
     wrist_xy = (int(wrist.x * w), int(wrist.y * h))
     elbow_xy = (int(elbow.x * w), int(elbow.y * h))
@@ -21,31 +23,47 @@ def check_guard(img, wrist, shoulder, elbow, h, w):
     if wrist.y < shoulder.y:
         color = (0, 255, 0)  # green
     else:
-        color = (0, 0, 255)  # red
+        color = (255, 0, 0)  # red
+
+    # Pillow expects RGB tuple
+    color_rgb = (color[0], color[1], color[2])
 
     # Draw custom lines (shoulder → elbow → wrist)
-    cv2.line(img, shoulder_xy, elbow_xy, color, 3)
-    cv2.line(img, elbow_xy, wrist_xy, color, 3)
+    draw.line([shoulder_xy, elbow_xy], fill=color_rgb, width=3)
+    draw.line([elbow_xy, wrist_xy], fill=color_rgb, width=3)
 
-    # Optional: draw circles
-    cv2.circle(img, shoulder_xy, 6, color, -1)
-    cv2.circle(img, elbow_xy, 6, color, -1)
-    cv2.circle(img, wrist_xy, 6, color, -1)
+    # Draw small circles
+    r = 6
+    for xy in [shoulder_xy, elbow_xy, wrist_xy]:
+        draw.ellipse([xy[0] - r, xy[1] - r, xy[0] + r, xy[1] + r], fill=color_rgb)
+
 
 class PoseProcessor(VideoProcessorBase):
     def __init__(self):
         self.pose = mp_pose.Pose()
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
+        # Convert to numpy array (RGB for PIL)
+        img = frame.to_ndarray(format="rgb24")
         h, w, _ = img.shape
 
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.pose.process(img_rgb)
+        # Run pose detection
+        results = self.pose.process(img)
+
+        # Convert to PIL for drawing
+        pil_img = Image.fromarray(img)
+        draw = ImageDraw.Draw(pil_img)
 
         if results.pose_landmarks:
-            mp_draw.draw_landmarks(img, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            # Draw skeleton using mediapipe (requires numpy array)
+            annotated = np.array(pil_img)
+            mp_draw.draw_landmarks(annotated, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
+            # Convert back to PIL for custom drawing
+            pil_img = Image.fromarray(annotated)
+            draw = ImageDraw.Draw(pil_img)
+
+            # Extract landmarks
             landmarks = results.pose_landmarks.landmark
             left_wrist = landmarks[mp_pose.PoseLandmark.LEFT_WRIST]
             left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
@@ -54,13 +72,15 @@ class PoseProcessor(VideoProcessorBase):
             right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
             right_elbow = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW]
 
-            check_guard(img, left_wrist, left_shoulder, left_elbow, h, w)
-            check_guard(img, right_wrist, right_shoulder, right_elbow, h, w)
+            # Apply guard checks
+            check_guard(draw, left_wrist, left_shoulder, left_elbow, h, w)
+            check_guard(draw, right_wrist, right_shoulder, right_elbow, h, w)
         else:
-            cv2.putText(img, "No pose detected", (10, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            # Add "No pose detected" text
+            draw.text((10, 40), "No pose detected", fill=(255, 0, 0))
 
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+        # Convert back to numpy and return as frame
+        return av.VideoFrame.from_ndarray(np.array(pil_img), format="rgb24")
 
     def __del__(self):
         try:
@@ -68,7 +88,9 @@ class PoseProcessor(VideoProcessorBase):
         except:
             pass
 
-st.title("🤖 Pose Detection with Streamlit + WebRTC")
+
+# Streamlit UI
+st.title("🤖 Pose Detection without OpenCV")
 
 webrtc_streamer(
     key="pose-detection",
