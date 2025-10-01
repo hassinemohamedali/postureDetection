@@ -1,6 +1,7 @@
 import sys
 import streamlit as st
 st.sidebar.info(f"🐍 Python version: {sys.version}")
+"""
 import mediapipe as mp
 import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
@@ -98,3 +99,4 @@ webrtc_streamer(
     media_stream_constraints={"video": True, "audio": False},
     video_processor_factory=PoseProcessor,
 )
+"""
