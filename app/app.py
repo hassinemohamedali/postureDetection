@@ -69,7 +69,7 @@ class PoseProcessor(VideoProcessorBase):
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # Return as av.VideoFrame
-        new_frame = av.VideoFrame.from_ndarray(img, format="bgr24")
+        new_frame = frame.from_ndarray(img, format="bgr24")
         return new_frame
 
     def __del__(self):
@@ -97,18 +97,27 @@ elif option == "Upload Video":
         import tempfile
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(uploaded_file.read())
+        input_path = tfile.name
 
-        cap = cv2.VideoCapture(tfile.name)
+        #output file
+        out_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
+
+        cap = cv2.VideoCapture(input_path)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+
         pose = mp.solutions.pose.Pose()
 
-        stframe = st.empty()  # placeholder for video frames
-
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
-            h, w, _ = frame.shape
+            
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(img_rgb)
 
@@ -132,6 +141,13 @@ elif option == "Upload Video":
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             # Show in Streamlit
-            stframe.image(frame, channels="BGR")
+            out.write(frame)
         
+
         cap.release()
+        out.release()
+        pose.close()
+
+        # Display output video
+        st.success("Processing complete!")
+        st.video(out_path)
