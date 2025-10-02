@@ -3,3 +3,4 @@ streamlit-webrtc==0.47.1
 opencv-python-headless==4.10.0.84
 mediapipe==0.10.14
 av==12.0.0
+opencv-contrib-python-headless==4.12.0.88
